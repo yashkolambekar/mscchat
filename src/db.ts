@@ -2,34 +2,12 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { config } from "./config.js";
+import { migrate } from "./migrate.js";
 
 mkdirSync(dirname(config.dbPath), { recursive: true });
 export const db = new DatabaseSync(config.dbPath);
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  CREATE TABLE IF NOT EXISTS documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    body TEXT NOT NULL,
-    summary TEXT NOT NULL DEFAULT '',
-    index_status TEXT NOT NULL DEFAULT 'pending',
-    index_error TEXT,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS chat_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    doc_ids TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-// Migration: expiry date (YYYY-MM-DD, inclusive) added after first release.
-if (!(db.prepare("PRAGMA table_info(documents)").all() as { name: string }[]).some((c) => c.name === "expires_at"))
-  db.exec("ALTER TABLE documents ADD COLUMN expires_at TEXT");
+db.exec("PRAGMA journal_mode = WAL");
+migrate(db, config.dbPath);
 
 export type Doc = {
   id: number;

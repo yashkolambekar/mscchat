@@ -42,6 +42,7 @@
   form { display: flex; gap: .6rem; padding: .8rem 0 1.2rem; border-top: 1px solid var(--line); }
   form textarea { resize: none; max-height: 140px; }
   .foot { text-align: center; font-size: .75rem; padding-bottom: .8rem; }
+  .foot a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -63,7 +64,7 @@
     <textarea id="q" class="field" rows="1" maxlength="500" placeholder="Type your question…" required></textarea>
     <button class="btn primary" id="send">Send</button>
   </form>
-  <div class="foot muted">Answers come from admin-posted notes. If unsure, ask the admin.</div>
+  <div class="foot muted">Answers come from admin-posted notes. If unsure, ask the admin. · <a href="https://github.com/yashkolambekar/mscchat" target="_blank" rel="noopener noreferrer">View project on GitHub ↗</a></div>
 </div>
 <dialog id="docDlg" aria-labelledby="docTitle">
   <div class="dlg-head"><h2 id="docTitle"></h2><span class="row-btns"><a class="btn" id="docOpen" target="_blank" rel="noopener" style="text-decoration:none">Open in new page ↗</a> <button class="btn" id="docClose" type="button">Close</button></span></div>
