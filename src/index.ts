@@ -34,7 +34,7 @@ async function indexDoc(id: number) {
       log("index", `doc ${id}: summary failed (continuing)`, e instanceof Error ? e.message : String(e));
     }
     // Index the FULL text (chunked), not the summary.
-    await addAndCognify(id, d.title, d.body);
+    await addAndCognify([{ id, title: d.title, text: d.body }]);
     docs.setStatus(id, "indexed");
     log("index", `doc ${id}: INDEXED`);
   } catch (e) {
@@ -128,16 +128,24 @@ admin.post("/documents/:id/reindex", (c) => {
   void indexDoc(id);
   return c.json({ ok: true });
 });
-/** Re-index every post one after another (needed once after changing how posts are indexed). */
+/** Re-index every post in ONE add + cognify (needed once after changing how posts are indexed). */
 let reindexing = false;
 admin.post("/reindex-all", (c) => {
-  if (reindexing) return c.json({ error: "Already running." }, 409);
+  if (reindexing) return c.json({ error: "Re-index is already running. Wait for it to finish." }, 409);
   const all = docs.list();
+  if (!all.length) return c.json({ error: "No documents to index." }, 400);
   reindexing = true;
   for (const d of all) docs.setStatus(d.id, "pending");
   void (async () => {
     try {
-      for (const d of all) await indexDoc(d.id);
+      log("index", `re-index all: ${all.length} post(s)`);
+      await addAndCognify(all.map((d) => ({ id: d.id, title: d.title, text: d.body })));
+      for (const d of all) docs.setStatus(d.id, "indexed");
+      log("index", "re-index all: DONE");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log("index", "re-index all: FAILED", msg);
+      for (const d of all) docs.setStatus(d.id, "failed", msg);
     } finally {
       reindexing = false;
     }

@@ -163,7 +163,10 @@ $("cancelReview").addEventListener("click", hideReview);
 
 $("reindexAll").addEventListener("click", async () => {
   if (!confirm("Re-index every post in Cognee? This can take a few minutes.")) return;
-  try { await api("/reindex-all", { method: "POST" }); } catch (e) { alert(e.message); }
+  try {
+    const r = await api("/reindex-all", { method: "POST" });
+    alert(`Re-indexing ${r.count} post(s) started. Status badges update below.`);
+  } catch (e) { alert("Re-index failed: " + e.message); }
   loadDocs();
 });
 

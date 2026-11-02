@@ -47,15 +47,23 @@ export function chunkDoc(id: number, title: string, body: string): string[] {
   return chunks.map((t, i) => `[doc:${id}] ${title} (part ${i + 1}/${chunks.length})\n\n${t}`);
 }
 
-export async function addAndCognify(id: number, title: string, text: string) {
+export type IndexItem = { id: number; title: string; text: string };
+
+/** Upload the chunks of one or more posts, then run a single cognify for the whole batch. */
+export async function addAndCognify(items: IndexItem[]) {
+  const id = items.length === 1 ? String(items[0].id) : `batch(${items.length})`;
   if (!config.cognee.url || !config.cognee.apiKey) throw new Error("COGNEE_URL / COGNEE_API_KEY not set");
   log("cognee", `add doc ${id} -> dataset "${config.cognee.dataset}" at ${config.cognee.url}`);
   const form = new FormData();
   form.append("datasetName", config.cognee.dataset);
   // Upload as real text files: the "raw_data" string field returned data_ingestion_info:[] (nothing stored).
-  const chunks = chunkDoc(id, title, text);
-  log("cognee", `doc ${id}: ${chunks.length} chunk(s)`);
-  chunks.forEach((t, i) => form.append("data", new Blob([t], { type: "text/plain" }), `doc-${id}-part-${i + 1}.txt`));
+  let total = 0;
+  for (const it of items) {
+    const chunks = chunkDoc(it.id, it.title, it.text);
+    total += chunks.length;
+    chunks.forEach((t, i) => form.append("data", new Blob([t], { type: "text/plain" }), `doc-${it.id}-part-${i + 1}.txt`));
+  }
+  log("cognee", `doc ${id}: ${total} chunk(s) from ${items.length} post(s)`);
   const addRes = await fetch(`${config.cognee.url}/api/v1/add`, { method: "POST", headers: headers(false), body: form });
   const addBody = await addRes.clone().text();
   log("cognee", `add response ${addRes.status}`, addBody.slice(0, 500));
@@ -95,10 +103,10 @@ export async function addAndCognify(id: number, title: string, text: string) {
     log("cognee", "no dataset id in cognify response; cannot poll status");
     return;
   }
-  await waitForPipeline(datasetId, id);
+  await waitForPipeline(datasetId, id, 5 * 60_000 + items.length * 30_000);
 }
 
-async function waitForPipeline(datasetId: string, docId: number, timeoutMs = 5 * 60_000) {
+async function waitForPipeline(datasetId: string, docId: string, timeoutMs = 5 * 60_000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     await new Promise((r) => setTimeout(r, 3000));
