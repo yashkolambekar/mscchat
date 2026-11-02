@@ -1,0 +1,12 @@
+services:
+  mscbot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000"
+    volumes:
+      - mscbot-data:/data
+
+volumes:
+  mscbot-data:

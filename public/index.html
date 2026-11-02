@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MSc CS Class Assistant</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .app { max-width: 760px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; padding: 0 1rem; }
+  header { padding: 1.6rem 0 1rem; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 1.7rem; }
+  header p { margin: .25rem 0 0; font-size: .95rem; }
+  #log { flex: 1; overflow-y: auto; padding: 1.2rem 0; display: flex; flex-direction: column; gap: .9rem; scroll-behavior: smooth; }
+  .msg { max-width: 88%; padding: .75rem 1rem; border-radius: var(--radius); word-wrap: break-word; overflow-wrap: anywhere; line-height: 1.6; animation: in .25s ease-out; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-bottom-left-radius: 4px; }
+  .msg.err { border-color: var(--danger); color: var(--danger); }
+  .msg.user { white-space: pre-wrap; }
+  .rich > * { margin: 0 0 .7rem; }
+  .rich > :last-child { margin-bottom: 0; }
+  .rich ul, .rich ol { padding-left: 1.3rem; }
+  .rich li { margin: .2rem 0; }
+  .rich a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+  .msg.user a { color: inherit; }
+  .rich code { background: var(--accent-soft); padding: .05rem .35rem; border-radius: 5px; font-size: .9em; }
+  .src { margin-top: .8rem; padding-top: .6rem; border-top: 1px dashed var(--line); font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+  .srcbtn { cursor: pointer; background: var(--accent-soft); color: var(--accent); border: 0; padding: .2rem .65rem; border-radius: 999px; font-size: .8rem; }
+  .srcbtn:hover { text-decoration: underline; }
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); max-width: 640px; width: calc(100% - 2rem); max-height: 85vh; padding: 1.2rem 1.4rem; box-shadow: var(--shadow); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { font-size: 1.25rem; }
+  .dlg-head { display: flex; justify-content: space-between; gap: 1rem; align-items: start; margin-bottom: .2rem; }
+  #docMeta { font-size: .8rem; margin-bottom: .9rem; }
+  #docBody { overflow-y: auto; max-height: 60vh; }
+  .typing i { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: var(--muted); animation: b 1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s } .typing i:nth-child(3) { animation-delay: .3s }
+  @keyframes b { 0%,80%,100% { opacity: .25 } 40% { opacity: 1 } }
+  @keyframes in { from { opacity: 0; transform: translateY(6px) } }
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .chip { cursor: pointer; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: .35rem .8rem; font-size: .88rem; }
+  .chip:hover { background: var(--accent-soft); }
+  form { display: flex; gap: .6rem; padding: .8rem 0 1.2rem; border-top: 1px solid var(--line); }
+  form textarea { resize: none; max-height: 140px; }
+  .foot { text-align: center; font-size: .75rem; padding-bottom: .8rem; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Class Assistant</h1>
+    <p class="muted">MSc Computer Science · Ask about deadlines, rooms, submissions and announcements.</p>
+  </header>
+  <main id="log" aria-live="polite">
+    <div class="msg bot">Hi! Ask me anything about the course. I only answer from what the admin has posted.</div>
+    <div class="chips" id="chips">
+      <button class="chip" type="button">When is the next deadline?</button>
+      <button class="chip" type="button">Any room changes?</button>
+      <button class="chip" type="button">How do I submit the assignment?</button>
+    </div>
+  </main>
+  <form id="f">
+    <label class="sr" for="q">Your question</label>
+    <textarea id="q" class="field" rows="1" maxlength="500" placeholder="Type your question…" required></textarea>
+    <button class="btn primary" id="send">Send</button>
+  </form>
+  <div class="foot muted">Answers come from admin-posted notes. If unsure, ask the admin.</div>
+</div>
+<dialog id="docDlg" aria-labelledby="docTitle">
+  <div class="dlg-head"><h2 id="docTitle"></h2><span class="row-btns"><a class="btn" id="docOpen" target="_blank" rel="noopener" style="text-decoration:none">Open in new page ↗</a> <button class="btn" id="docClose" type="button">Close</button></span></div>
+  <div id="docMeta" class="muted"></div>
+  <div id="docBody"></div>
+</dialog>
+<script src="/render.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>

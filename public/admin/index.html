@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin · MSc CS Class Assistant</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .wrap { max-width: 920px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.2rem; box-shadow: var(--shadow); margin-bottom: 1.2rem; }
+  .card h2 { font-size: 1.2rem; margin-bottom: .8rem; }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: .7rem 0 .25rem; }
+  textarea.field { min-height: 150px; resize: vertical; }
+  .doc { border-top: 1px solid var(--line); padding: .9rem 0; }
+  .doc:first-child { border-top: 0; }
+  .doc h3 { margin: 0; font-size: 1.02rem; }
+  .doc p { margin: .3rem 0 .5rem; color: var(--muted); font-size: .9rem; white-space: pre-wrap; }
+  .badge { font-size: .72rem; padding: .1rem .55rem; border-radius: 999px; border: 1px solid currentColor; }
+  .badge.indexed { color: var(--ok) } .badge.pending { color: var(--warn) } .badge.failed { color: var(--danger) } .badge.expired { color: var(--muted) }
+  .login { max-width: 360px; margin: 18vh auto 0; }
+  .err { color: var(--danger); font-size: .9rem; min-height: 1.2rem; }
+  .tabs { display: flex; gap: .4rem; margin-bottom: 1rem; }
+  .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .log-item { border-top: 1px solid var(--line); padding: .7rem 0; font-size: .92rem; }
+  .log-item:first-child { border-top: 0; }
+  .log-item b { display: block; }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .cmp { grid-template-columns: 1fr; } }
+  .orig { white-space: pre-wrap; font-size: .9rem; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .85rem; min-height: 150px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="loginView" class="login card hidden">
+    <h1 style="font-size:1.5rem">Admin login</h1>
+    <form id="loginForm">
+      <label for="pw">Password</label>
+      <input id="pw" class="field" type="password" autocomplete="current-password" required>
+      <p class="err" id="loginErr" role="alert"></p>
+      <button class="btn primary" style="width:100%">Sign in</button>
+    </form>
+  </section>
+
+  <section id="appView" class="hidden">
+    <div class="top">
+      <h1>Class notes</h1>
+      <button class="btn" id="logout">Log out</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="btn tab" role="tab" id="tabDocs" aria-selected="true">Documents</button>
+      <button class="btn tab" role="tab" id="tabLog" aria-selected="false">Student questions</button>
+    </div>
+
+    <div id="docsPane">
+      <div class="card">
+        <h2 id="formTitle">Add announcement</h2>
+        <form id="docForm">
+          <label for="title">Title</label>
+          <input id="title" class="field" maxlength="200" required placeholder="e.g. Assignment 2 deadline">
+          <label for="body">Full text</label>
+          <textarea id="body" class="field" required placeholder="Paste the full announcement or notes…"></textarea>
+          <label for="expires">Expires on <span class="muted">(optional, hidden from students after this date)</span></label>
+          <input id="expires" class="field" type="date" style="max-width:200px">
+          <p class="err" id="docErr" role="alert"></p>
+          <div class="row">
+            <button class="btn primary" id="saveBtn">Rewrite &amp; review</button>
+            <button class="btn hidden" type="button" id="cancelEdit">Cancel edit</button>
+          </div>
+        </form>
+      </div>
+      <div class="card hidden" id="reviewCard">
+        <h2>Review rewrite</h2>
+        <p class="muted" style="margin-top:0">AI cleaned up your text. Edit the right side if needed, then choose.</p>
+        <div class="cmp">
+          <div><label>Your original</label><div class="orig" id="origView"></div></div>
+          <div>
+            <label for="rwTitle">Rewritten title</label>
+            <input id="rwTitle" class="field" maxlength="200">
+            <label for="rwBody">Rewritten text</label>
+            <textarea id="rwBody" class="field"></textarea>
+          </div>
+        </div>
+        <p class="err" id="rwErr" role="alert"></p>
+        <div class="row">
+          <button class="btn primary" type="button" id="useRewrite">Save rewrite &amp; index</button>
+          <button class="btn" type="button" id="keepOrig">Save my original</button>
+          <button class="btn" type="button" id="cancelReview">Back to editing</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Saved documents</h2>
+        <div id="docList"><p class="muted">Loading…</p></div>
+      </div>
+    </div>
+
+    <div id="logPane" class="card hidden">
+      <h2>Recent student questions</h2>
+      <div id="logList"></div>
+    </div>
+  </section>
+</div>
+<script src="/admin/admin.js"></script>
+</body>
+</html>
