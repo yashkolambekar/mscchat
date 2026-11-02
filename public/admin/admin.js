@@ -161,6 +161,12 @@ $("keepOrig").addEventListener("click", async () => {
 });
 $("cancelReview").addEventListener("click", hideReview);
 
+$("reindexAll").addEventListener("click", async () => {
+  if (!confirm("Re-index every post in Cognee? This can take a few minutes.")) return;
+  try { await api("/reindex-all", { method: "POST" }); } catch (e) { alert(e.message); }
+  loadDocs();
+});
+
 function tab(which) {
   const docs = which === "docs";
   $("docsPane").classList.toggle("hidden", !docs);

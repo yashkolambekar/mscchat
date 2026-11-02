@@ -60,9 +60,12 @@ export async function answer(question: string, history: Turn[] = [], prevDocIds:
     .map((x) => x.d);
   log("chat", `cognee ids=${JSON.stringify(ids)} -> found in sqlite=${JSON.stringify(found.map((d) => d.id))}`);
 
-  if (found.length === 0) {
-    found = docs.keywordSearch(query, 3);
-    log("chat", `keyword fallback -> ${JSON.stringify(found.map((d) => d.id))}`);
+  // Top up with keyword matches so a weak semantic search never leaves the answer ungrounded.
+  if (found.length < 3) {
+    for (const d of docs.keywordSearch(query, 3)) {
+      if (found.length < 3 && !found.some((f) => f.id === d.id)) found.push(d);
+    }
+    log("chat", `after keyword top-up -> ${JSON.stringify(found.map((d) => d.id))}`);
   }
   // Keep docs from the previous turn so follow-ups stay grounded.
   for (const d of docs.getMany(prevDocIds)) {

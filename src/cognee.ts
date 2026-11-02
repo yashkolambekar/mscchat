@@ -13,17 +13,49 @@ async function check(res: Response, what: string) {
   return res;
 }
 
-/** Text stored in Cognee: tiny pointer + summary. Full body stays in SQLite. */
-export const indexText = (id: number, title: string, summary: string) =>
-  `[doc:${id}] ${title}: ${summary}`;
+const CHUNK_CHARS = 900;
 
-export async function addAndCognify(id: number, title: string, summary: string) {
+/**
+ * Split the FULL body into small chunks so every part of the post is searchable.
+ * Every chunk carries "[doc:ID] title" so a hit on any chunk maps back to its post.
+ * Chunks stay under Cognee's own chunk size, so each one is stored as-is.
+ */
+export function chunkDoc(id: number, title: string, body: string): string[] {
+  const pieces: string[] = [];
+  for (const para of body.replace(/\r\n?/g, "\n").split(/\n{2,}/)) {
+    let p = para.trim();
+    while (p.length > CHUNK_CHARS) {
+      // Prefer a sentence/line break, else a space, else a hard cut.
+      let cut = Math.max(p.lastIndexOf(". ", CHUNK_CHARS), p.lastIndexOf("\n", CHUNK_CHARS));
+      if (cut < CHUNK_CHARS / 2) cut = p.lastIndexOf(" ", CHUNK_CHARS);
+      if (cut < CHUNK_CHARS / 2) cut = CHUNK_CHARS;
+      pieces.push(p.slice(0, cut + 1).trim());
+      p = p.slice(cut + 1).trim();
+    }
+    if (p) pieces.push(p);
+  }
+  const chunks: string[] = [];
+  let cur = "";
+  for (const piece of pieces) {
+    if (cur && cur.length + piece.length + 2 > CHUNK_CHARS) {
+      chunks.push(cur);
+      cur = "";
+    }
+    cur += (cur ? "\n\n" : "") + piece;
+  }
+  if (cur) chunks.push(cur);
+  return chunks.map((t, i) => `[doc:${id}] ${title} (part ${i + 1}/${chunks.length})\n\n${t}`);
+}
+
+export async function addAndCognify(id: number, title: string, text: string) {
   if (!config.cognee.url || !config.cognee.apiKey) throw new Error("COGNEE_URL / COGNEE_API_KEY not set");
   log("cognee", `add doc ${id} -> dataset "${config.cognee.dataset}" at ${config.cognee.url}`);
   const form = new FormData();
   form.append("datasetName", config.cognee.dataset);
-  // Upload as a real text file: the "raw_data" string field returned data_ingestion_info:[] (nothing stored).
-  form.append("data", new Blob([indexText(id, title, summary)], { type: "text/plain" }), `doc-${id}.txt`);
+  // Upload as real text files: the "raw_data" string field returned data_ingestion_info:[] (nothing stored).
+  const chunks = chunkDoc(id, title, text);
+  log("cognee", `doc ${id}: ${chunks.length} chunk(s)`);
+  chunks.forEach((t, i) => form.append("data", new Blob([t], { type: "text/plain" }), `doc-${id}-part-${i + 1}.txt`));
   const addRes = await fetch(`${config.cognee.url}/api/v1/add`, { method: "POST", headers: headers(false), body: form });
   const addBody = await addRes.clone().text();
   log("cognee", `add response ${addRes.status}`, addBody.slice(0, 500));
@@ -90,7 +122,7 @@ async function waitForPipeline(datasetId: string, docId: number, timeoutMs = 5 *
  * The CHUNKS response shape is not documented, so parse defensively:
  * stringify the whole response and pull every "[doc:N]" tag in order.
  */
-export async function searchDocIds(query: string, topK = 5): Promise<number[]> {
+export async function searchDocIds(query: string, topK = 10): Promise<number[]> {
   if (!config.cognee.url || !config.cognee.apiKey) throw new Error("COGNEE_URL / COGNEE_API_KEY not set");
   log("cognee", `search "${query}" dataset="${config.cognee.dataset}" top_k=${topK}`);
   const raw = await fetch(`${config.cognee.url}/api/v1/search`, {

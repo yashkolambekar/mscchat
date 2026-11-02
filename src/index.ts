@@ -25,10 +25,16 @@ async function indexDoc(id: number) {
   try {
     log("index", `doc ${id} "${d.title}": start`);
     docs.setStatus(id, "pending");
-    const summary = await summarize(d.title, d.body);
-    log("index", `doc ${id}: summary`, summary);
-    docs.setSummary(id, summary);
-    await addAndCognify(id, d.title, summary);
+    // Summary is only for the admin list and keyword fallback; failing here must not block indexing.
+    try {
+      const summary = await summarize(d.title, d.body);
+      log("index", `doc ${id}: summary`, summary);
+      docs.setSummary(id, summary);
+    } catch (e) {
+      log("index", `doc ${id}: summary failed (continuing)`, e instanceof Error ? e.message : String(e));
+    }
+    // Index the FULL text (chunked), not the summary.
+    await addAndCognify(id, d.title, d.body);
     docs.setStatus(id, "indexed");
     log("index", `doc ${id}: INDEXED`);
   } catch (e) {
@@ -121,6 +127,22 @@ admin.post("/documents/:id/reindex", (c) => {
   if (!docs.get(id)) return c.json({ error: "Not found" }, 404);
   void indexDoc(id);
   return c.json({ ok: true });
+});
+/** Re-index every post one after another (needed once after changing how posts are indexed). */
+let reindexing = false;
+admin.post("/reindex-all", (c) => {
+  if (reindexing) return c.json({ error: "Already running." }, 409);
+  const all = docs.list();
+  reindexing = true;
+  for (const d of all) docs.setStatus(d.id, "pending");
+  void (async () => {
+    try {
+      for (const d of all) await indexDoc(d.id);
+    } finally {
+      reindexing = false;
+    }
+  })();
+  return c.json({ ok: true, count: all.length });
 });
 admin.delete("/documents/:id", (c) => {
   docs.remove(Number(c.req.param("id")));
