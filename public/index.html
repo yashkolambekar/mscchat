@@ -50,6 +50,7 @@
   <header>
     <h1>Class Assistant</h1>
     <p class="muted">MSc Computer Science · Ask about deadlines, rooms, submissions and announcements.</p>
+    <div class="chips" style="margin-top:.6rem"><a class="chip" href="/announcements" style="text-decoration:none;color:inherit">📢 Announcements</a><a class="chip" href="/events" style="text-decoration:none;color:inherit">📅 Events</a><button class="chip" id="notifyBtn" type="button" hidden></button></div>
   </header>
   <main id="log" aria-live="polite">
     <div class="msg bot">Hi! Ask me anything about the course. I only answer from what the admin has posted.</div>
@@ -73,5 +74,6 @@
 </dialog>
 <script src="/render.js"></script>
 <script src="/chat.js"></script>
+<script src="/push.js"></script>
 </body>
 </html>

@@ -1,7 +1,8 @@
-import { chatLog, docs, isExpired, recency, type Doc } from "./db.js";
+import { chatLog, docs, events, isExpired, recency, type CalEvent, type Doc } from "./db.js";
 import { searchDocIds } from "./cognee.js";
 import { llm } from "./llm.js";
 import { log } from "./log.js";
+import { istToday, nextOccurrence } from "./time.js";
 
 export type Turn = { role: "user" | "assistant"; content: string };
 
@@ -16,6 +17,15 @@ Rules:
 - Newer posts matter more. If documents conflict, prefer the most recently posted one and say the older info was replaced.
 - Format for easy reading: short paragraphs separated by a blank line; "- " bullets for lists or steps; **bold** for key dates and deadlines. Put links as plain full URLs. No headings or tables.
 - Keep replies short and natural. Ask a clarifying question if the question is really ambiguous.`;
+
+/** One line describing an event for the LLM; weekly events show their next date. */
+function eventLine(e: CalEvent): string {
+  const o = nextOccurrence(e);
+  const t = (s: string) => (e.all_day ? s.slice(0, 10) : s.replace("T", " "));
+  const when = `${t(o.starts_at)}${o.ends_at ? " to " + (o.ends_at.slice(0, 10) === o.starts_at.slice(0, 10) ? o.ends_at.slice(11) : t(o.ends_at)) : ""}${e.all_day ? " (all day)" : ""}`;
+  const day = new Date(`${o.starts_at.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  return `${e.title}: ${e.repeat ? `every ${day}, next on ` : ""}${when}${e.location ? `, at ${e.location}` : ""}${e.notes ? `. ${e.notes}` : ""}`;
+}
 
 /** Turn a follow-up into a standalone search query using the chat history. */
 async function standaloneQuery(question: string, history: Turn[]): Promise<string> {
@@ -77,9 +87,16 @@ export async function answer(question: string, history: Turn[] = [], prevDocIds:
     ? found.map((d) => `--- Document "${d.title}" (posted ${d.created_at}${d.updated_at !== d.created_at ? `, edited ${d.updated_at}` : ""}${d.expires_at ? `, valid until ${d.expires_at}` : ""}) ---\n${d.body}`).join("\n\n")
     : "(no admin documents matched this question)";
 
+  // Events linked to the chosen posts (independent rows, so this works even if the post wording is vague).
+  const evs = events.forDocs(found.map((d) => d.id));
+  const eventsCtx = evs.length
+    ? `\n\nCalendar events linked to those documents (times are IST; these are exact):\n${evs.map((e) => `- ${eventLine(e)} (from document "${found.find((d) => d.id === e.doc_id)?.title}")`).join("\n")}`
+    : "";
+  if (evs.length) log("chat", `events=${JSON.stringify(evs.map((e) => e.id))}`);
+
   const a = await llm(
     [
-      { role: "system", content: `${SYSTEM}\n\nToday is ${new Date().toISOString().slice(0, 10)}.\n\nAdmin documents:\n${context}` },
+      { role: "system", content: `${SYSTEM}\n\nToday is ${istToday()}.\n\nAdmin documents:\n${context}${eventsCtx}` },
       ...history,
       { role: "user", content: question },
     ],

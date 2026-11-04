@@ -40,7 +40,61 @@ const MIGRATIONS: Migration[] = [
   (db) => {
     if (!hasColumn(db, "documents", "expires_at")) db.exec("ALTER TABLE documents ADD COLUMN expires_at TEXT");
   },
-  // v3: add the next change here.
+  // v3: Web Push subscriptions (anonymous, keyed by endpoint)
+  (db) =>
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );`),
+  // v4: when a post was announced (notify checkbox); NULL = never announced
+  (db) => {
+    if (!hasColumn(db, "documents", "announced_at")) db.exec("ALTER TABLE documents ADD COLUMN announced_at TEXT");
+  },
+  // v5: archive of every notification sent
+  (db) =>
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_id INTEGER NOT NULL,
+        doc_title TEXT NOT NULL,
+        hint TEXT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        subscribers INTEGER NOT NULL DEFAULT 0,
+        delivered INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );`),
+  // v6: calendar events. doc_id is a plain reference (no FK): events outlive their post.
+  (db) =>
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        starts_at TEXT NOT NULL,
+        ends_at TEXT,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        location TEXT,
+        notes TEXT,
+        doc_id INTEGER,
+        sequence INTEGER NOT NULL DEFAULT 0,
+        cancelled INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );`),
+  // v7: weekly recurring events (starts_at is the first occurrence)
+  (db) => {
+    if (!hasColumn(db, "events", "repeat")) db.exec("ALTER TABLE events ADD COLUMN repeat TEXT");
+  },
+  // v8: count notification clicks
+  (db) => {
+    if (!hasColumn(db, "notifications", "opens")) db.exec("ALTER TABLE notifications ADD COLUMN opens INTEGER NOT NULL DEFAULT 0");
+  },
+  // v9: add the next change here.
 ];
 
 export function migrate(db: DatabaseSync, dbPath: string) {

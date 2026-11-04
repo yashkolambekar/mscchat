@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events · MSc CS Class Assistant</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .wrap { max-width: 720px; margin: 0 auto; padding: 1.6rem 1rem 4rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.3rem; box-shadow: var(--shadow); margin-bottom: .8rem; }
+  h1 { font-size: 1.6rem; margin-bottom: .6rem; }
+  .card h2 { font-size: 1.1rem; margin-bottom: .2rem; }
+  .when { font-weight: 600; color: var(--accent); font-size: .92rem; }
+  .meta { font-size: .85rem; margin-top: .3rem; white-space: pre-wrap; }
+  .back { display: inline-block; margin-bottom: 1rem; color: var(--accent); font-size: .9rem; }
+  .sub { margin-bottom: 1.2rem; font-size: .9rem; }
+  .sub a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to assistant</a>
+  <h1>Upcoming events</h1>
+  <p class="sub muted">Add to your calendar: <a id="webcal">subscribe (webcal)</a><br>Calendar apps refresh subscriptions every few hours, so changes may take a while to appear there.</p>
+  <div id="list"><p class="muted">Loading…</p></div>
+</div>
+<script>
+document.getElementById("webcal").href = "webcal://" + location.host + "/calendar.ics";
+const fmt = (e) => {
+  const d = (s) => new Date(s.length === 10 ? s + "T00:00" : s);
+  const day = { weekday: "short", day: "numeric", month: "short", year: "numeric" };
+  const a = d(e.starts_at);
+  let t = a.toLocaleDateString(undefined, day);
+  if (e.all_day) { if (e.ends_at && e.ends_at !== e.starts_at) t += " – " + d(e.ends_at).toLocaleDateString(undefined, day); return (e.repeat ? "Every week · next: " : "") + t + " (all day)"; }
+  t += ", " + a.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (e.ends_at) { const b = d(e.ends_at); t += " – " + (e.ends_at.slice(0, 10) === e.starts_at.slice(0, 10) ? "" : b.toLocaleDateString(undefined, day) + ", ") + b.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
+  t += " IST";
+  return e.repeat ? "Every week · next: " + t : t;
+};
+(async () => {
+  const list = document.getElementById("list");
+  try {
+    const res = await fetch("/api/events");
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    list.replaceChildren();
+    if (!items.length) { list.innerHTML = '<p class="muted">No upcoming events.</p>'; return; }
+    for (const e of items) {
+      const card = document.createElement("article");
+      card.className = "card";
+      const h = document.createElement("h2"); h.textContent = e.title;
+      const w = document.createElement("div"); w.className = "when"; w.textContent = fmt(e);
+      card.append(h, w);
+      const bits = [e.location && "📍 " + e.location, e.notes].filter(Boolean).join("\n");
+      if (bits) { const m = document.createElement("div"); m.className = "meta muted"; m.textContent = bits; card.append(m); }
+      if (e.post_id) { const a = document.createElement("a"); a.href = "/post.html?id=" + e.post_id; a.textContent = "Related post →"; a.style.cssText = "display:inline-block;margin-top:.4rem;font-size:.85rem;color:var(--accent)"; card.append(a); }
+      list.append(card);
+    }
+  } catch { list.textContent = "Could not load events."; }
+})();
+</script>
+</body>
+</html>

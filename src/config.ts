@@ -12,6 +12,11 @@ export const config = {
     tenantId: env.COGNEE_TENANT_ID ?? "",
     dataset: env.COGNEE_DATASET ?? "msc-class",
   },
+  vapid: {
+    publicKey: env.VAPID_PUBLIC_KEY ?? "",
+    privateKey: env.VAPID_PRIVATE_KEY ?? "",
+    subject: env.VAPID_SUBJECT ?? "mailto:admin@example.com",
+  },
   cf: {
     accountId: env.CF_ACCOUNT_ID ?? "",
     apiToken: env.CF_API_TOKEN ?? "",

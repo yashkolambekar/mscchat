@@ -66,6 +66,7 @@ async function loadDocs() {
       el("a", { className: "btn", textContent: "Open", href: postUrl(d.id), target: "_blank", rel: "noopener", style: "text-decoration:none" }),
       el("button", { className: "btn", textContent: "Copy link", onclick: (e) => copyLink(d.id, e.target) }),
       el("button", { className: "btn", textContent: "Edit", onclick: () => startEdit(d) }),
+      el("button", { className: "btn", textContent: "Suggest events", onclick: (e) => suggestEvents(d, e.target) }),
       d.index_status === "failed"
         ? el("button", { className: "btn", textContent: "Retry index", onclick: () => act(`/documents/${d.id}/reindex`, "POST") })
         : "",
@@ -109,13 +110,14 @@ function resetForm() {
   $("docForm").reset();
   $("formTitle").textContent = "Add announcement";
   $("cancelEdit").classList.add("hidden");
+  $("hintWrap").classList.add("hidden");
   $("saveBtn").textContent = "Rewrite & review";
   $("saveOrigFallback")?.remove();
 }
 $("cancelEdit").addEventListener("click", resetForm);
 
 async function save(title, body) {
-  const payload = JSON.stringify({ title, body, expires_at: $("expires").value || null });
+  const payload = JSON.stringify({ title, body, expires_at: $("expires").value || null, notify: $("notify").checked, notify_hint: $("notify").checked ? $("hint").value : "" });
   if (editingId) await api(`/documents/${editingId}`, { method: "PUT", body: payload });
   else await api("/documents", { method: "POST", body: payload });
   hideReview();
@@ -171,15 +173,34 @@ $("reindexAll").addEventListener("click", async () => {
 });
 
 function tab(which) {
-  const docs = which === "docs";
-  $("docsPane").classList.toggle("hidden", !docs);
-  $("logPane").classList.toggle("hidden", docs);
-  $("tabDocs").setAttribute("aria-selected", docs);
-  $("tabLog").setAttribute("aria-selected", !docs);
-  if (!docs) loadLog();
+  for (const [k, pane, btn] of [["docs", "docsPane", "tabDocs"], ["events", "eventsPane", "tabEvents"], ["notif", "notifPane", "tabNotif"], ["log", "logPane", "tabLog"]]) {
+    $(pane).classList.toggle("hidden", k !== which);
+    $(btn).setAttribute("aria-selected", k === which);
+  }
+  if (which === "log") loadLog();
+  if (which === "notif") loadNotifs();
+  if (which === "events") loadEvents();
 }
 $("tabDocs").addEventListener("click", () => tab("docs"));
+$("tabEvents").addEventListener("click", () => tab("events"));
+$("tabNotif").addEventListener("click", () => tab("notif"));
 $("tabLog").addEventListener("click", () => tab("log"));
+$("notify").addEventListener("change", () => $("hintWrap").classList.toggle("hidden", !$("notify").checked));
+
+async function loadNotifs() {
+  const rows = await api("/notifications");
+  const box = $("notifList");
+  box.replaceChildren();
+  if (!rows.length) box.append(el("p", { className: "muted", textContent: "No notifications sent yet." }));
+  for (const r of rows) {
+    box.append(el("div", { className: "log-item" },
+      el("b", { textContent: r.title }),
+      el("span", { textContent: r.body }),
+      el("div", { className: "muted", style: "font-size:.75rem", textContent:
+        `${r.created_at} · post: ${r.doc_title}${r.hint ? ` · hint: ${r.hint}` : ""} · delivered ${r.delivered}/${r.subscribers} · opened ${r.opens}` }),
+    ));
+  }
+}
 
 async function loadLog() {
   const rows = await api("/chat-log");
@@ -193,6 +214,116 @@ async function loadLog() {
       el("div", { className: "muted", style: "font-size:.75rem", textContent: r.created_at }),
     ));
   }
+}
+
+// ---------- events ----------
+let editingEvId = null;
+let evDocs = [];
+const evFmt = (e) => (e.repeat ? "every week from " : "") + (e.all_day ? e.starts_at : e.starts_at.replace("T", " ")) + (e.ends_at ? " → " + (e.all_day ? e.ends_at : e.ends_at.replace("T", " ")) : "");
+
+function setAllDay(on) {
+  $("evAllDay").checked = on;
+  $("evStart").type = $("evEnd").type = on ? "date" : "datetime-local";
+}
+$("evAllDay").addEventListener("change", () => {
+  const [s, e] = [$("evStart").value, $("evEnd").value];
+  setAllDay($("evAllDay").checked);
+  const conv = (v) => (!v ? "" : $("evAllDay").checked ? v.slice(0, 10) : v.length === 10 ? v + "T09:00" : v);
+  $("evStart").value = conv(s);
+  $("evEnd").value = conv(e);
+});
+function fillEvent(e, docId) {
+  setAllDay(!!e.all_day);
+  $("evTitle").value = e.title;
+  $("evStart").value = e.starts_at;
+  $("evEnd").value = e.ends_at || "";
+  $("evLoc").value = e.location || "";
+  $("evNotes").value = e.notes || "";
+  $("evRepeat").checked = e.repeat === "weekly";
+  $("evDoc").value = docId ? String(docId) : "";
+  scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetEvent() {
+  editingEvId = null;
+  $("evForm").reset();
+  setAllDay(false);
+  $("evFormTitle").textContent = "Add event";
+  $("evCancelEdit").classList.add("hidden");
+  $("evErr").textContent = "";
+}
+$("evCancelEdit").addEventListener("click", resetEvent);
+$("evForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("evErr").textContent = "";
+  const payload = JSON.stringify({
+    title: $("evTitle").value, all_day: $("evAllDay").checked, starts_at: $("evStart").value, ends_at: $("evEnd").value,
+    location: $("evLoc").value, notes: $("evNotes").value, repeat: $("evRepeat").checked ? "weekly" : null, doc_id: $("evDoc").value ? Number($("evDoc").value) : null,
+  });
+  try {
+    if (editingEvId) await api(`/events/${editingEvId}`, { method: "PUT", body: payload });
+    else await api("/events", { method: "POST", body: payload });
+    resetEvent();
+    loadEvents();
+  } catch (x) { $("evErr").textContent = x.message; }
+});
+async function loadEvents() {
+  const [list, docsList] = await Promise.all([api("/events"), api("/documents")]);
+  evDocs = docsList;
+  const sel = $("evDoc"), cur = sel.value;
+  sel.replaceChildren(el("option", { value: "", textContent: "None" }), ...docsList.map((d) => el("option", { value: String(d.id), textContent: d.title })));
+  sel.value = cur;
+  const box = $("evList");
+  box.replaceChildren();
+  if (!list.length) box.append(el("p", { className: "muted", textContent: "No events yet." }));
+  for (const e of list) {
+    const post = e.doc_id ? (docsList.find((d) => d.id === e.doc_id)?.title ?? "(post deleted)") : null;
+    box.append(el("div", { className: "doc" },
+      el("div", { className: "row" },
+        el("h3", { textContent: e.title }),
+        e.cancelled ? el("span", { className: "badge failed", textContent: "cancelled" }) : "",
+      ),
+      el("p", { textContent: evFmt(e) + (e.location ? " · " + e.location : "") + (post ? " · post: " + post : "") }),
+      el("div", { className: "row" },
+        el("button", { className: "btn", textContent: e.cancelled ? "Restore (edit)" : "Edit", onclick: () => {
+          editingEvId = e.id;
+          $("evFormTitle").textContent = "Edit event";
+          $("evCancelEdit").classList.remove("hidden");
+          fillEvent(e, e.doc_id && docsList.some((d) => d.id === e.doc_id) ? e.doc_id : null);
+        } }),
+        e.cancelled ? "" : el("button", { className: "btn danger", textContent: "Cancel event", onclick: async () => {
+          if (!confirm(`Cancel "${e.title}"? Calendars will show it as cancelled.`)) return;
+          try { await api(`/events/${e.id}`, { method: "DELETE" }); } catch (x) { alert(x.message); }
+          loadEvents();
+        } }),
+      ),
+    ));
+  }
+}
+async function suggestEvents(d, btn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
+  try {
+    const sug = await api("/events/suggest", { method: "POST", body: JSON.stringify({ title: d.title, body: d.body }) });
+    tab("events");
+    $("sugCard").classList.remove("hidden");
+    $("sugFrom").textContent = `from "${d.title}"`;
+    const box = $("sugList");
+    box.replaceChildren();
+    if (!sug.length) box.append(el("p", { className: "muted", textContent: "No dated events found in this post." }));
+    for (const s of sug) {
+      box.append(el("div", { className: "log-item row" },
+        el("span", { textContent: `${s.title} · ${evFmt(s)}${s.location ? " · " + s.location : ""}` }),
+        el("button", { className: "btn", type: "button", textContent: "Use", onclick: () => {
+          editingEvId = null;
+          $("evFormTitle").textContent = "Add event";
+          $("evCancelEdit").classList.add("hidden");
+          fillEvent(s, d.id);
+        } }),
+      ));
+    }
+  } catch (x) { alert(x.message); }
+  finally { btn.disabled = false; btn.textContent = old; }
 }
 
 api("/me").then(showApp).catch(showLogin);
